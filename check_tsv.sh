@@ -1,6 +1,6 @@
-!/bin/bash
+#!/bin/bash
 
-# Function to check if a file is a TSV file based on the header and check for line discrepancies
+# Function to check if a file is a TSV file based on the header, remove the "Continent" column, remove rows without a country code, and include only rows with years between 2011 to 2021
 check_tsv() {
     local file="$1"
     local output_file="${file%.tsv}_processed.tsv"
@@ -25,7 +25,8 @@ check_tsv() {
         if (continent_col) {
             for (i=1; i<=NF; i++) {
                 if (i != continent_col) {
-                    printf "%s%s", $i, (i < NF ? OFS : ORS)
+                    printf "%s", $i
+                    if (i < NF && i != continent_col - 1) printf "%s", OFS
                 }
             }
             print ""
@@ -33,14 +34,15 @@ check_tsv() {
             print
         }
     }
-    NR > 1 {
+    NR > 1 && $2 != "" && $3 >= 2011 && $3 <= 2021 {
         if (continent_col) {
             if (NF != num_columns) {
                 print "Line " NR " in " file " does not have the same number of cells as the header." > "/dev/stderr";
             }
             for (i=1; i<=NF; i++) {
                 if (i != continent_col) {
-                    printf "%s%s", $i, (i < NF ? OFS : ORS)
+                    printf "%s", $i
+                    if (i < NF && i != continent_col - 1) printf "%s", OFS
                 }
             }
             print ""
@@ -58,6 +60,3 @@ check_tsv() {
 for file in "$@"; do
     if [[ -f "$file" ]]; then
         check_tsv "$file"
-    else
-        echo "$file does not exist."
-
