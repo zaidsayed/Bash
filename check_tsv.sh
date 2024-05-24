@@ -7,13 +7,7 @@ process_file() {
     local output_file="${file%.tsv}_processed.tsv"
     local header=$(head -n 1 "$file")
 
-    local is_tsv=$(awk -F'\t' 'NR == 1 { num_fields = NF } { if (NF != num_fields) exit 1 } END { if (NR > 0 && num_fields > 1) print "TSV"; else print "not T    SV" }' "$file")
-
-    if [[ "$is_tsv" == "TSV" ]]; then
-        echo "$file is a TSV file."
-    else
-        echo "$file is not a TSV file."
-    fi
+   
 
 
     # Finding the column number of continent
@@ -22,7 +16,7 @@ process_file() {
     # Count the number of columns in the header
     local num_columns=$(echo "$header" | awk -F'\t' '{print NF}')
 
-    # Use awk to process the file
+    # Use awk to process the file - delete continent column, see if row has same number of cells as header
     awk -v num_columns="$num_columns" -v file="$file" -v continent_col="$continent_col" '
     BEGIN { FS="\t"; OFS="\t"; }
     NR == 1 {
@@ -51,7 +45,8 @@ process_file() {
             }
             print ""
         } else {
-            if (NF != num_columns) {
+
+ if (NF != num_columns) {
                 print "Line " NR " in " file " does not have the same number of cells as the header." > "/dev/stderr";
             } else {
                 print
@@ -98,17 +93,16 @@ sort -k1,1 -k2,2 "$processed_file1" > sorted_gdp_vs_happiness.tsv
 sort -k1,1 -k2,2 "$processed_file2" > sorted_homicide.tsv
 sort -k1,1 -k2,2 "$processed_file3" > sorted_life_satisfaction.tsv
 
+
 # Join the files based on 'Entity' and 'Year' columns
 join -t $'\t' -1 1 -2 1 sorted_gdp_vs_happiness.tsv sorted_homicide.tsv | join -t $'\t' -1 1 -2 1 - sorted_life_satisfaction.tsv > temp_output.tsv
 
-# Add the header to the output file
-echo  "$HEADER" > "$OUTPUT_FILE"
+#echo "$HEADER" > "$OUTPUT_FILE"
 cat temp_output.tsv >> "$OUTPUT_FILE"
 
 # Clean up temporary files
 rm sorted_gdp_vs_happiness.tsv sorted_homicide.tsv sorted_life_satisfaction.tsv temp_output.tsv
 
-echo "Common rows have been saved to $OUTPUT_FILE"
 
 # Input and output file paths
 input_file=$OUTPUT_FILE
@@ -126,14 +120,10 @@ awk -F'\t' '{
         print $0
 }' "$input_file" > temp_filtered.tsv
 
-
-# Add the header to the filtered output file
-echo  "$HEADER" > "$output_file"
+#echo "$HEADER" > "$output_file"
 cat temp_filtered.tsv >> "$output_file"
 
 rm temp_filtered.tsv
-
-echo "Filtered data has been saved to $output_file"
 
 input="filtered_common_rows_output.tsv"
 output="updated_filtered_common_rows_output.tsv"
@@ -146,19 +136,17 @@ awk -F'\t' 'BEGIN {OFS = FS} {
     print $0
 }' "$input"  > temp_updated.tsv
 
-# Add the header to the updated filtered output file
-echo  "$HEADER" > "$output"
+echo "$HEADER" > "$output"
 cat temp_updated.tsv >> "$output"
 
 rm temp_updated.tsv
 
-last="sorted_by_country_code.tsv"
+last="final_cleaned_data.tsv"
 
 # Here I am sorting the column based on country code and removing an extra empty column at the end of the file.
 { head -n 1 "$output"; tail -n +2 "$output" | sort -t$'\t' -k2,2; } | cut -d $'\t' -f1-8  > "$last"
 
-echo "Updated data has been saved to $last"
+# This is to remove a row that is popping up in my output
+sed -i '' '/Entity\tCode\tYear\t\"GDP per capita, PPP (constant 2017 international \$)\"\tPopulation (historical estimates)\t\"Homicide rate per 100,000 population - Both sexes - All ages\"\tLife expectancy - Sex: all - Age: at birth - Variant: estimates\tCantril ladder score/d' "$last"
 
-
-
-
+cat $last
