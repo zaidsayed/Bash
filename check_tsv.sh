@@ -1,18 +1,22 @@
 #!/bin/bash
 
-# Function to check if a file is a TSV file based on the header, remove the "Continent" column, remove rows without a country code, and include only rows with years between 2011 to 2021
-check_tsv() {
+# This function checks whether a file is tsv, removes continent column, deletes rows without a country code and only keep rows within the years 2011 to 2021
+
+process_file() {
     local file="$1"
     local output_file="${file%.tsv}_processed.tsv"
     local header=$(head -n 1 "$file")
 
-    if [[ "$header" == *$'\t'* ]]; then
+    local is_tsv=$(awk -F'\t' 'NR == 1 { num_fields = NF } { if (NF != num_fields) exit 1 } END { if (NR > 0 && num_fields > 1) print "TSV"; else print "not T    SV" }' "$file")
+
+    if [[ "$is_tsv" == "TSV" ]]; then
         echo "$file is a TSV file."
     else
         echo "$file is not a TSV file."
     fi
 
-    # Identify the column number for the "Continent" header
+
+    # Finding the column number of continent
     local continent_col=$(echo "$header" | awk -F'\t' '{for (i=1; i<=NF; i++) if ($i == "Continent") print i}')
 
     # Count the number of columns in the header
@@ -56,7 +60,105 @@ check_tsv() {
     }' "$file" > "$output_file"
 }
 
-# Iterate over all input files
+
+
+# Process each TSV file and store output filenames in variables
+processed_file1=""
+processed_file2=""
+processed_file3=""
+
 for file in "$@"; do
     if [[ -f "$file" ]]; then
-        check_tsv "$file"
+        process_file "$file"
+        case "$file" in
+            *gdp_vs_happiness.tsv)
+                processed_file1="${file%.tsv}_processed.tsv"
+                ;;
+            *homicide.tsv)
+                processed_file2="${file%.tsv}_processed.tsv"
+                ;;
+            *life_satisfaction.tsv)
+                processed_file3="${file%.tsv}_processed.tsv"
+                ;;
+        esac
+    else
+        echo "$file does not exist."
+    fi
+done
+
+
+# The above code processed the individual files based on the requirements. The code below has logic for joining the processed tsv files.
+
+
+OUTPUT_FILE="common_rows_output.tsv"
+HEADER="Entity\tCode\tYear\tGDP per capita\tPopulation\tHomicide Rate\tLife Expectancy\tCantril Ladder score"
+
+# Sort the files based on 'Entity' and 'Year' columns
+sort -k1,1 -k2,2 "$processed_file1" > sorted_gdp_vs_happiness.tsv
+sort -k1,1 -k2,2 "$processed_file2" > sorted_homicide.tsv
+sort -k1,1 -k2,2 "$processed_file3" > sorted_life_satisfaction.tsv
+
+# Join the files based on 'Entity' and 'Year' columns
+join -t $'\t' -1 1 -2 1 sorted_gdp_vs_happiness.tsv sorted_homicide.tsv | join -t $'\t' -1 1 -2 1 - sorted_life_satisfaction.tsv > temp_output.tsv
+
+# Add the header to the output file
+echo  "$HEADER" > "$OUTPUT_FILE"
+cat temp_output.tsv >> "$OUTPUT_FILE"
+
+# Clean up temporary files
+rm sorted_gdp_vs_happiness.tsv sorted_homicide.tsv sorted_life_satisfaction.tsv temp_output.tsv
+
+echo "Common rows have been saved to $OUTPUT_FILE"
+
+# Input and output file paths
+input_file=$OUTPUT_FILE
+output_file="filtered_common_rows_output.tsv"
+
+# Check if the input file exists
+if [[ ! -f "$input_file" ]]; then
+    echo "Input file not found!"
+    exit 1
+fi
+
+# Process the file
+awk -F'\t' '{
+    if ($3 == $8 && $8 == $11)
+        print $0
+}' "$input_file" > temp_filtered.tsv
+
+
+# Add the header to the filtered output file
+echo  "$HEADER" > "$output_file"
+cat temp_filtered.tsv >> "$output_file"
+
+rm temp_filtered.tsv
+
+echo "Filtered data has been saved to $output_file"
+
+input="filtered_common_rows_output.tsv"
+output="updated_filtered_common_rows_output.tsv"
+
+# Remove specified columns (4, 7, 8, 10, 11, 14) as they are duplicates
+
+awk -F'\t' 'BEGIN {OFS = FS} {
+    $4 = $7 = $8 = $10 = $11 = $14 = ""
+    gsub(/\t+/, "\t")
+    print $0
+}' "$input"  > temp_updated.tsv
+
+# Add the header to the updated filtered output file
+echo  "$HEADER" > "$output"
+cat temp_updated.tsv >> "$output"
+
+rm temp_updated.tsv
+
+last="sorted_by_country_code.tsv"
+
+# Here I am sorting the column based on country code and removing an extra empty column at the end of the file.
+{ head -n 1 "$output"; tail -n +2 "$output" | sort -t$'\t' -k2,2; } | cut -d $'\t' -f1-8  > "$last"
+
+echo "Updated data has been saved to $last"
+
+
+
+
