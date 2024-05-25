@@ -8,12 +8,13 @@ correlation="correlation.tsv"
 awk -F'\t' 'BEGIN {OFS="\t"}
     NR == 1 {
         for (i = 1; i <= NF; i++) {
-            if ($i == "Entity/Country") country = i
-            if ($i == "GDP per capita") gdp = i
-            if ($i == "Population") population = i
-            if ($i == "Homicide Rate") homicide = i
-            if ($i == "Life Expectancy") life = i
-            if ($i == "Cantril Ladder score") cantril = i
+            # Using regular expressions to match keywords in the column headers
+            if ($i ~ /Entity/) country = i
+            if ($i ~ /GDP/) gdp = i
+            if ($i ~ /Population/) population = i
+            if ($i ~ /Homicide/) homicide = i
+            if ($i ~ /Life/) life = i
+            if ($i ~ /Cantril/) cantril = i
         }
     }
     NR > 1 && $cantril != "" && $gdp != "" && $population != "" && $homicide != "" && $life != "" {
