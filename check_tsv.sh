@@ -30,6 +30,12 @@ for file in "$@"; do
     fi
 done
 
+ for file in "$1" "$2" "$3"; do
+      if [ ! -s "$file" ]; then
+          echo "Error: File '$file' is empty."
+          exit 1
+      fi
+ done
 
 
 
