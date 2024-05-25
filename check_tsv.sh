@@ -1,30 +1,66 @@
+                                                                 
+
 #!/bin/bash
 
-# This function checks whether a file is tsv, removes continent column, deletes rows without a country code and only keep rows within the years 2011 to 2021
 
+
+# Define the correct filenames
+declare -a correct_files=("gdp_vs_happiness.tsv" "homicide.tsv" "life_satisfaction.tsv")
+
+# See if there are three files
+if [ $# -ne 3 ]; then
+    echo "Three files should be entered"
+    exit 1
+fi
+
+# To check if correct file name has been entered
+has_file() {
+    local element
+    for element in "${@:2}"; do
+        [[ "$element" == "$1" ]] && return 0
+    done
+    return 1
+}
+
+# iterate through arguments
+for file in "$@"; do
+    if ! has_file "$file" "${correct_files[@]}"; then
+        echo "Error: Wrong file name - $file"
+        exit 1
+    fi
+done
+
+
+
+
+
+
+
+# This function checks whether a file is tsv, removes continent column, deletes rows without a country code and only keep rows within the years 2011 to 2021
 process_file() {
+
     local file="$1"
-    local output_file="${file%.tsv}_processed.tsv"
+    local output_file="${file%.tsv}_cleaned.tsv"
     local header=$(head -n 1 "$file")
 
    
 
 
     # Finding the column number of continent
-    local continent_col=$(echo "$header" | awk -F'\t' '{for (i=1; i<=NF; i++) if ($i == "Continent") print i}')
+    local continent=$(echo "$header" | awk -F'\t' '{for (i=1; i<=NF; i++) if ($i == "Continent") print i}')
 
     # Count the number of columns in the header
     local num_columns=$(echo "$header" | awk -F'\t' '{print NF}')
 
     # Use awk to process the file - delete continent column, see if row has same number of cells as header
-    awk -v num_columns="$num_columns" -v file="$file" -v continent_col="$continent_col" '
+    awk -v num_columns="$num_columns" -v file="$file" -v continent="$continent" '
     BEGIN { FS="\t"; OFS="\t"; }
     NR == 1 {
-        if (continent_col) {
+        if (continent) {
             for (i=1; i<=NF; i++) {
-                if (i != continent_col) {
+                if (i != continent) {
                     printf "%s", $i
-                    if (i < NF && i != continent_col - 1) printf "%s", OFS
+                    if (i < NF && i != continent - 1) printf "%s", OFS
                 }
             }
             print ""
@@ -33,21 +69,20 @@ process_file() {
         }
     }
     NR > 1 && $2 != "" && $3 >= 2011 && $3 <= 2021 {
-        if (continent_col) {
+        if (continent) {
             if (NF != num_columns) {
-                print "Line " NR " in " file " does not have the same number of cells as the header." > "/dev/stderr";
+                print "Line " NR " in " file " has different number of cells than that in the header." > "/dev/stderr";
             }
             for (i=1; i<=NF; i++) {
-                if (i != continent_col) {
+                if (i != continent) {
                     printf "%s", $i
-                    if (i < NF && i != continent_col - 1) printf "%s", OFS
+                    if (i < NF && i != continent - 1) printf "%s", OFS
                 }
             }
             print ""
         } else {
-
- if (NF != num_columns) {
-                print "Line " NR " in " file " does not have the same number of cells as the header." > "/dev/stderr";
+            if (NF != num_columns) {
+                print "Line " NR " in " file " has different number of cells than that in the header." > "/dev/stderr";
             } else {
                 print
             }
@@ -58,22 +93,22 @@ process_file() {
 
 
 # Process each TSV file and store output filenames in variables
-processed_file1=""
-processed_file2=""
-processed_file3=""
+cleaned_file1=""
+cleaned_file2=""
+cleaned_file3=""
 
 for file in "$@"; do
     if [[ -f "$file" ]]; then
         process_file "$file"
         case "$file" in
             *gdp_vs_happiness.tsv)
-                processed_file1="${file%.tsv}_processed.tsv"
+                cleaned_file1="${file%.tsv}_cleaned.tsv"
                 ;;
             *homicide.tsv)
-                processed_file2="${file%.tsv}_processed.tsv"
+                cleaned_file2="${file%.tsv}_cleaned.tsv"
                 ;;
             *life_satisfaction.tsv)
-                processed_file3="${file%.tsv}_processed.tsv"
+                cleaned_file3="${file%.tsv}_cleaned.tsv"
                 ;;
         esac
     else
@@ -84,15 +119,14 @@ done
 
 # The above code processed the individual files based on the requirements. The code below has logic for joining the processed tsv files.
 
-
-OUTPUT_FILE="common_rows_output.tsv"
-HEADER="Entity\tCode\tYear\tGDP per capita\tPopulation\tHomicide Rate\tLife Expectancy\tCantril Ladder score"
+     
+OUTPUT_FILE="joined_file.tsv"
+HEADER="Entity/Country\tCode\tYear\tGDP per capita\tPopulation\tHomicide Rate\tLife Expectancy\tCantril Ladder score"
 
 # Sort the files based on 'Entity' and 'Year' columns
-sort -k1,1 -k2,2 "$processed_file1" > sorted_gdp_vs_happiness.tsv
-sort -k1,1 -k2,2 "$processed_file2" > sorted_homicide.tsv
-sort -k1,1 -k2,2 "$processed_file3" > sorted_life_satisfaction.tsv
-
+sort -k1,1 -k2,2 "$cleaned_file1" > sorted_gdp_vs_happiness.tsv
+sort -k1,1 -k2,2 "$cleaned_file2" > sorted_homicide.tsv
+sort -k1,1 -k2,2 "$cleaned_file3" > sorted_life_satisfaction.tsv
 
 # Join the files based on 'Entity' and 'Year' columns
 join -t $'\t' -1 1 -2 1 sorted_gdp_vs_happiness.tsv sorted_homicide.tsv | join -t $'\t' -1 1 -2 1 - sorted_life_satisfaction.tsv > temp_output.tsv
@@ -106,7 +140,7 @@ rm sorted_gdp_vs_happiness.tsv sorted_homicide.tsv sorted_life_satisfaction.tsv 
 
 # Input and output file paths
 input_file=$OUTPUT_FILE
-output_file="filtered_common_rows_output.tsv"
+output_file="joined_file_filtered.tsv"
 
 # Check if the input file exists
 if [[ ! -f "$input_file" ]]; then
@@ -114,7 +148,7 @@ if [[ ! -f "$input_file" ]]; then
     exit 1
 fi
 
-# Process the file
+# Process the file- of the joined rows, only want to take those rows with the same year
 awk -F'\t' '{
     if ($3 == $8 && $8 == $11)
         print $0
@@ -125,8 +159,8 @@ cat temp_filtered.tsv >> "$output_file"
 
 rm temp_filtered.tsv
 
-input="filtered_common_rows_output.tsv"
-output="updated_filtered_common_rows_output.tsv"
+input="joined_file_filtered.tsv"
+output="updated_joined_file_filtered.tsv"
 
 # Remove specified columns (4, 7, 8, 10, 11, 14) as they are duplicates
 
@@ -141,6 +175,9 @@ cat temp_updated.tsv >> "$output"
 
 rm temp_updated.tsv
 
+
+# last is the name of the final cleaned file
+
 last="final_cleaned_data.tsv"
 
 # Here I am sorting the column based on country code and removing an extra empty column at the end of the file.
@@ -150,3 +187,18 @@ last="final_cleaned_data.tsv"
 sed -i '' '/Entity\tCode\tYear\t\"GDP per capita, PPP (constant 2017 international \$)\"\tPopulation (historical estimates)\t\"Homicide rate per 100,000 population - Both sexes - All ages\"\tLife expectancy - Sex: all - Age: at birth - Variant: estimates\tCantril ladder score/d' "$last"
 
 cat $last
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
